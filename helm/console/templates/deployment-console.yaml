@@ -1,0 +1,130 @@
+apiVersion: {{ .Values.console.apiVersion }}
+kind: Deployment
+metadata:
+  # name: console
+  # include the release, if practical to do so
+  # name: {{ template "console.fullname" . }}
+  name: {{ .Values.auth.clientID }}
+  # must be in this namespace per conventions
+  namespace: {{ .Values.shared.namespace }}
+  labels: 
+    {{- range .Values.shared.labels }}
+    {{ .name }}: {{ .value }}
+    {{- end }}   
+    {{- range .Values.console.labels }}
+    {{ .name }}: {{ .value }}
+    {{- end }}    
+spec:
+  replicas: {{ .Values.console.replicaCount}}
+  selector:
+    matchLabels: 
+      {{- range .Values.shared.labels }}
+      {{ .name }}: {{ .value }}
+      {{- end }}   
+      {{- range .Values.console.labels }}
+      {{ .name }}: {{ .value }}
+      {{- end }}   
+  template:
+    metadata:
+      # name:  {{ template "console.fullname" . }}
+      name: {{ .Values.auth.clientID }}
+      labels:
+        {{- range .Values.shared.labels }}
+        {{ .name }}: {{ .value }}
+        {{- end }}   
+        {{- range .Values.console.labels }}
+        {{ .name }}: {{ .value }}
+        {{- end }}          
+    spec:
+      # OFF FOR TESTING
+      # nodeSelector:
+      #  node-role.kubernetes.io/master: 'true'
+      restartPolicy: Always
+      schedulerName: default-scheduler 
+      # this is interesting, curious if we always need it
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: openshift-console
+                topologyKey: kubernetes.io/hostname      
+      terminationGracePeriodSeconds: {{ .Values.console.terminationGracePeriodSeconds }}
+      securityContext: {}
+      containers:
+      - name: {{ .Values.auth.clientID }}
+        # name: {{ template "console.fullname" . }}
+        imagePullPolicy: Always
+        image: {{ .Values.console.image }}
+        # match to the config map
+        command:
+        - /opt/bridge/bin/bridge
+        - '--public-dir=/opt/bridge/static'
+        - '--config=/var/console-config/console-config.yaml'          
+        resources:
+          limits:
+            cpu: {{ .Values.console.cpu }}
+            memory: {{ .Values.console.memory}}
+          requests:
+            cpu: {{ .Values.console.cpu }}
+            memory: {{ .Values.console.memory}}
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.console.probes.path }}
+            port: {{ .Values.console.probes.port }}
+            scheme: {{ .Values.console.probes.scheme }}
+          # it may make sense to provide timeout configuration
+          timeoutSeconds: {{ .Values.console.probes.timeoutSeconds }}
+          periodSeconds: {{ .Values.console.probes.periodSeconds }}
+          successThreshold: {{ .Values.console.probes.successThreshold }}
+          failureThreshold: {{ .Values.console.probes.failureThreshold }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.console.probes.path }}
+            port: {{ .Values.console.probes.port }}
+            scheme: {{ .Values.console.probes.scheme }}
+          initialDelaySeconds: 30
+          timeoutSeconds: {{ .Values.console.probes.timeoutSeconds }}
+          periodSeconds: {{ .Values.console.probes.periodSeconds }}
+          successThreshold: {{ .Values.console.probes.successThreshold }}
+          failureThreshold: {{ .Values.console.probes.failureThreshold }}
+        terminationMessagePath: /dev/termination-log
+        env: 
+        {{- range .Values.console.env }}
+        - name: {{ .name }}
+          value: {{ .value }}
+        {{- end }}
+        ports:
+        - containerPort: 8443
+          protocol: TCP
+        terminationMessagePolicy: File
+        volumeMounts:
+        {{- range .Values.console.volumesAndMounts }}
+        - name: {{ .name }}
+          readOnly: {{ .readOnly }}
+          mountPath: {{ .mountPath}}
+        {{- end }}
+      volumes:
+      {{- range .Values.console.volumesAndMounts }}
+      - name: {{ .name }}
+        {{- if .secret }}
+        secret:
+          secretName: {{ .secret.secretName }}
+          defaultMode: {{ .secret.defaultMode }}
+        {{- end}}
+        {{- if .configMap }}
+        configMap:
+          name: {{ .configMap.name }}
+          defaultMode: {{ .configMap.defaultMode }}
+        {{- end}}
+      {{- end }}
+      dnsPolicy: ClusterFirst
+    strategy:
+      type: RollingUpdate
+      rollingUpdate:
+        maxUnavailable: 25%
+        maxSurge: 25%
+    revisionHistoryLimit: 10
+    progressDeadlineSeconds: 600

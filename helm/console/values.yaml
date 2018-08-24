@@ -1,0 +1,91 @@
+# deduplication 
+shared:
+  # namespace: openshift-console
+  namespace: bens-project
+  labels:
+  - name: app
+    value: openshift-console
+
+# hosting information for configs, services, routes, etc
+servingInfo: 
+  bindAddress: https://0.0.0.0:8443
+  certFile: /var/serving-cert/tls.crt
+  keyFile: /var/serving-cert/tls.key
+# oauth client information 
+auth:
+  clientID: openshift-console
+  clientSecretFile: /var/oauth-config/clientSecret
+  logoutRedirect: ''
+  oauthEndpointCAFile: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+  # TODO: need to create an OAuth client...
+
+clusterInfo:
+  consoleBaseAddress: https://console.apps.ui-preserve.origin-gce.dev.openshift.com
+  consoleBasePath: ''
+  developerConsolePublicURL: https://api.ui-preserve.origin-gce.dev.openshift.com/console/
+  masterPublicURL: https://api.ui-preserve.origin-gce.dev.openshift.com/
+
+customization:
+  branding: okd
+  documentationBaseURL: https://docs.okd.io/3.11/
+    
+# The config map collects most of the above into a configuraiton file for 
+# the deployment. It is split out for the sake of deduplication (service/route/etc)
+consoleConfig:
+  name: console-config 
+  data:
+    apiVersion: console.openshift.io/v1beta1
+    kind: ConsoleConfig
+
+consoleService:
+  servingCertSecretName: console-serving-cert
+
+console:
+  apiVersion: apps/v1
+  image: quay.io/spadgett/origin-console@sha256:f9bc2e5d53f8ebde90de58e65ac895f910a5847b23ae13bb8cd50b02916b2e1b
+  labels:
+  - name: component
+    value: ui
+  replicaCount: 1
+  terminationGracePeriodSeconds: 30
+  # shared between limit & request
+  cpu: 100m
+  memory: 100Mi
+  # not to configure, just to deduplicate
+  probes:
+    path: /health
+    port: 8443
+    scheme: HTTPS
+    timeoutSeconds: 1
+    periodSeconds: 10
+    successThreshold: 1
+    failureThreshold: 3
+  env:
+  # thought this was passed via configmap... 
+  # guess its public so not a big deal, no need
+  # to hide
+  - name: BRIDGE_DEVELOPER_CONSOLE_URL
+    value: 'https://api.ui-preserve.origin-gce.dev.openshift.com/console/'    
+  # volumes & volume mounts repeat a lot of the 
+  # same information. 
+  volumesAndMounts:
+  - name: serving-cert
+    readOnly: true
+    mountPath: /var/serving-cert
+    secret:
+      secretName: console-serving-cert
+      defaultMode: 288
+  - name: oauth-config
+    readOnly: true
+    mountPath: /var/oauth-config
+    secret:
+      secretName: console-oauth-config
+      defaultMode: 288
+  # matches the console-config name above. would like to dedupe
+  - name: console-config
+    mountPath: /var/console-config
+    configMap:
+      name: console-config
+      defaultMode: 288
+
+    

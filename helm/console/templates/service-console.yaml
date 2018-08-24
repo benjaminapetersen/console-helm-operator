@@ -1,0 +1,29 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: {{ .Values.auth.clientID }}
+  namespace: {{ .Values.shared.namespace }}
+  labels:
+    {{- range .Values.shared.labels }}
+    {{ .name }}: {{ .value }}
+    {{- end }}
+  annotations:
+    service.alpha.openshift.io/serving-cert-secret-name: {{ .Values.consoleService.servingCertSecretName }}
+spec:
+  ports:
+    # deduplicate & share with the deployment
+    - name: https
+      protocol: TCP
+      port: 443
+      targetPort: 8443
+  selector:
+      {{- range .Values.shared.labels }}
+      {{ .name }}: {{ .value }}
+      {{- end }}   
+      {{- range .Values.console.labels }}
+      {{ .name }}: {{ .value }}
+      {{- end }} 
+  type: ClusterIP
+  sessionAffinity: None
+status:
+  loadBalancer: {}

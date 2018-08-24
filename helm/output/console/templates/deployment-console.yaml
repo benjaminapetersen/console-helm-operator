@@ -1,0 +1,121 @@
+##---
+# Source: console/templates/deployment-console.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  # name: console
+  # include the release, if practical to do so
+  # name: RELEASE-NAME-console
+  name: openshift-console
+  # must be in this namespace per conventions
+  namespace: bens-project
+  labels:
+    app: openshift-console
+    component: ui    
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: openshift-console
+      component: ui   
+  template:
+    metadata:
+      # name:  RELEASE-NAME-console
+      name: openshift-console
+      labels:
+        app: openshift-console
+        component: ui          
+    spec:
+      # OFF FOR TESTING
+      # nodeSelector:
+      #  node-role.kubernetes.io/master: 'true'
+      restartPolicy: Always
+      schedulerName: default-scheduler 
+      # this is interesting, curious if we always need it
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: openshift-console
+                topologyKey: kubernetes.io/hostname      
+      terminationGracePeriodSeconds: 30
+      securityContext: {}
+      containers:
+      - name: openshift-console
+        # name: RELEASE-NAME-console
+        imagePullPolicy: Always
+        image: quay.io/spadgett/origin-console@sha256:f9bc2e5d53f8ebde90de58e65ac895f910a5847b23ae13bb8cd50b02916b2e1b
+        # match to the config map
+        command:
+        - /opt/bridge/bin/bridge
+        - '--public-dir=/opt/bridge/static'
+        - '--config=/var/console-config/console-config.yaml'          
+        resources:
+          limits:
+            cpu: 100m
+            memory: 100Mi
+          requests:
+            cpu: 100m
+            memory: 100Mi
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8443
+            scheme: HTTPS
+          # it may make sense to provide timeout configuration
+          timeoutSeconds: 1
+          periodSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8443
+            scheme: HTTPS
+          initialDelaySeconds: 30
+          timeoutSeconds: 1
+          periodSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+        terminationMessagePath: /dev/termination-log
+        env:
+        - name: BRIDGE_DEVELOPER_CONSOLE_URL
+          value: https://api.ui-preserve.origin-gce.dev.openshift.com/console/
+        ports:
+        - containerPort: 8443
+          protocol: TCP
+        terminationMessagePolicy: File
+        volumeMounts:
+        - name: serving-cert
+          readOnly: true
+          mountPath: /var/serving-cert
+        - name: oauth-config
+          readOnly: true
+          mountPath: /var/oauth-config
+        - name: console-config
+          readOnly: 
+          mountPath: /var/console-config
+      volumes:
+      - name: serving-cert
+        secret:
+          secretName: console-serving-cert
+          defaultMode: 288
+      - name: oauth-config
+        secret:
+          secretName: console-oauth-config
+          defaultMode: 288
+      - name: console-config
+        configMap:
+          name: console-config
+          defaultMode: 288
+      dnsPolicy: ClusterFirst
+    strategy:
+      type: RollingUpdate
+      rollingUpdate:
+        maxUnavailable: 25%
+        maxSurge: 25%
+    revisionHistoryLimit: 10
+    progressDeadlineSeconds: 600

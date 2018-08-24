@@ -1,0 +1,22 @@
+##---
+# Source: console/templates/route-console.yaml
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: openshift-console
+  namespace: bens-project
+  labels:
+    app: openshift-console  
+spec:
+  # hopefully cluster will fill this out... 
+  # host: console.apps.ui-preserve.origin-gce.dev.openshift.com
+  to:
+    kind: Service
+    name: openshift-console
+    weight: 100
+  port:
+    targetPort: https
+  tls:
+    termination: reencrypt
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None

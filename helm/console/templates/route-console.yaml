@@ -1,0 +1,22 @@
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: {{ .Values.auth.clientID }}
+  namespace: {{ .Values.shared.namespace }}
+  labels:
+    {{- range .Values.shared.labels }}
+    {{ .name }}: {{ .value }}
+    {{- end }}  
+spec:
+  # hopefully cluster will fill this out... 
+  # host: console.apps.ui-preserve.origin-gce.dev.openshift.com
+  to:
+    kind: Service
+    name: {{ .Values.auth.clientID }}
+    weight: 100
+  port:
+    targetPort: https
+  tls:
+    termination: reencrypt
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None
